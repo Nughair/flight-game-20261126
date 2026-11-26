@@ -58,23 +58,27 @@ export function stepFlight(plane, stick, dt, wind = { x: 0, z: 0 }) {
   plane.throttle = clamp(plane.throttle + stick.throttleDelta * FLIGHT.throttleRate * dt, 0, 1);
 
   // Attitude chases the stick; the chase is quick but never instant, which
-  // is what makes the controls feel connected at every speed.
-  const rollTarget = stick.bank * (FLIGHT.bankMax * Math.PI) / 180;
+  // is what makes the controls feel connected at every speed. On the
+  // ground the wings stay level — she steers with the tail wheel instead.
+  const rollTarget = stick.bank * (FLIGHT.bankMax * Math.PI) / 180 * (plane.onGround ? 0.05 : 1);
   const pitchTarget = stick.pitch * (FLIGHT.pitchMax * Math.PI) / 180;
   const chase = Math.min(1, dt * 3.6);
   plane.roll += (rollTarget - plane.roll) * chase;
   if (plane.onGround) {
     // On the roll the nose stays down until she is rotated at speed.
     const canRotate = plane.speedKt >= FLIGHT.rotateSpeed && stick.pitch > 0.2;
-    plane.pitch += ((canRotate ? pitchTarget * 0.55 : 0) - plane.pitch) * Math.min(1, dt * 2.4);
+    plane.pitch += ((canRotate ? pitchTarget * 0.55 : 0) - plane.pitch) * Math.min(1, dt * 3.2);
   } else {
     plane.pitch += (pitchTarget - plane.pitch) * chase;
   }
 
-  // Speed: thrust against quadratic drag and the hill of a climb.
+  // Speed: thrust against quadratic drag and, once airborne, the hill of
+  // a climb. At full throttle the drag balances thrust near 115 knots; on
+  // the roll she passes the 46-knot rotate speed with strip to spare.
+  // (On her wheels a raised nose costs nothing — the ground carries her.)
   let accel = plane.throttle * FLIGHT.accelFull
-    - FLIGHT.dragQuad * plane.speedKt * plane.speedKt * 8
-    - Math.sin(plane.pitch) * 21;
+    - FLIGHT.dragQuad * plane.speedKt * plane.speedKt
+    - (plane.onGround ? 0 : Math.sin(plane.pitch) * 21);
   if (plane.onGround) {
     accel -= 1.6; // rolling friction
     if (stick.brake) accel -= 15;
@@ -146,9 +150,14 @@ export function stepFlight(plane, stick, dt, wind = { x: 0, z: 0 }) {
     }
     plane.onGround = true;
     if (plane.speedKt < 2) plane.vy = 0;
-  } else if (plane.onGround && plane.y > floorY + 0.4) {
-    plane.onGround = false;
-    events.push({ type: 'liftoff' });
+    // Rotation: fast enough, nose up, and the wing takes the weight — she
+    // leaves the ground with the climb her pitch asks for.
+    if (plane.speedKt >= FLIGHT.rotateSpeed && plane.pitch > 0.04) {
+      plane.onGround = false;
+      plane.y = floorY + 0.6;
+      plane.vy = Math.sin(plane.pitch) * speedMs * 0.92;
+      events.push({ type: 'liftoff' });
+    }
   }
   // Rolling into rising ground or water at speed ends the flight too.
   if (plane.onGround && !plane.crashed) {

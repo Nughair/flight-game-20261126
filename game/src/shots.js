@@ -76,7 +76,7 @@ function stageCover(G) {
 function stageMaildrop(G) {
   const campaign = { hull: 100, score: 1120, results: [], repairNote: 0, verdict: '' };
   const sortie = new Sortie(SORTIE_DEFS[1], campaign);
-  sortie.timeSec = 188;
+  sortie.timeSec = 96;
   sortie.fuel = 79;
   sortie.tookOff = true;
   G.campaign = campaign;
@@ -88,7 +88,7 @@ function stageMaildrop(G) {
     speedKt: 78, throttle: 0.62,
   });
   sortie.parcels.push({
-    x: 545, y: 66, z: -1395, vx: 2.6, vy: -5.4, vz: 0.9,
+    x: 514, y: 83, z: -1353, vx: 2.6, vy: -5.4, vz: 0.9,
     age: 3, chute: true, landed: false, target: sortie.targets[0],
   });
   sortie.parcelsAboard = 2;

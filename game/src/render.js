@@ -173,15 +173,23 @@ function drawRain(ctx, timeSec) {
 // --- terrain, sea and strip ----------------------------------------------
 
 function collectTerrain(list, basis, pal, storm, timeSec) {
-  const cx = Math.round(cam.x / CELL) * CELL;
-  const cz = Math.round(cam.z / CELL) * CELL;
-  const n = GRID_HALF * 2 + 1;
+  // Two tiers: a fine grid around the camera for the ground you fly over,
+  // and a coarse ring beyond it so the world reaches the horizon — at
+  // ground level a 1.2 km world would end in open sky.
+  collectTerrainLayer(list, basis, pal, storm, timeSec, CELL, GRID_HALF, 0);
+  collectTerrainLayer(list, basis, pal, storm, timeSec, 184, 16, 1210);
+}
+
+function collectTerrainLayer(list, basis, pal, storm, timeSec, cell, half, minCentreDist) {
+  const cx = Math.round(cam.x / cell) * cell;
+  const cz = Math.round(cam.z / cell) * cell;
+  const n = half * 2 + 1;
   // Project the shared vertex grid once; quads reuse the corners.
   const vx = new Float32Array(n);
   const vz = new Float32Array(n);
   const heights = [];
   const screen = [];
-  for (let i = 0; i < n; i++) { vx[i] = cx + (i - GRID_HALF) * CELL; vz[i] = cz + (i - GRID_HALF) * CELL; }
+  for (let i = 0; i < n; i++) { vx[i] = cx + (i - half) * cell; vz[i] = cz + (i - half) * cell; }
   for (let j = 0; j < n; j++) {
     heights.push(new Float32Array(n));
     screen.push(new Array(n));
@@ -197,6 +205,13 @@ function collectTerrain(list, basis, pal, storm, timeSec) {
       const h00 = heights[j][i], h10 = heights[j][i + 1], h01 = heights[j + 1][i], h11 = heights[j + 1][i + 1];
       const depth = (p00.depth + p10.depth + p01.depth + p11.depth) / 4;
       if (depth > 3400) continue;
+      if (minCentreDist > 0) {
+        // The coarse ring leaves the middle to the fine grid (a square
+        // hole, like the fine grid's own footprint).
+        const qx = Math.abs((vx[i] + vx[i + 1]) / 2 - cx);
+        const qz = Math.abs((vz[j] + vz[j + 1]) / 2 - cz);
+        if (Math.max(qx, qz) < minCentreDist) continue;
+      }
       const pts = [p00, p10, p11, p01];
       if (Math.max(h00, h10, h01, h11) < 0.05) {
         // Open water: flat quad at sea level, a whisper of per-cell tone
@@ -208,8 +223,8 @@ function collectTerrain(list, basis, pal, storm, timeSec) {
       } else {
         const avgH = (h00 + h10 + h01 + h11) / 4;
         // Surface normal from the corner heights, for the sun's shading.
-        const ex = { x: CELL, y: h10 - h00, z: 0 };
-        const ez = { x: 0, y: h01 - h00, z: CELL };
+        const ex = { x: cell, y: h10 - h00, z: 0 };
+        const ez = { x: 0, y: h01 - h00, z: cell };
         const nrm = norm3(ex.y * ez.z - ex.z * ez.y, ex.z * ez.x - ex.x * ez.z, ex.x * ez.y - ex.y * ez.x);
         const light = 0.6 + 0.47 * Math.max(0, nrm.x * SUN_DIR.x + nrm.y * SUN_DIR.y + nrm.z * SUN_DIR.z);
         const slope = 1 - Math.abs(nrm.y);
